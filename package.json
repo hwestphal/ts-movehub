@@ -1,0 +1,18 @@
+{
+    "private": true,
+    "scripts": {
+        "build": "tsc && tslint -p . && tslint 'src/**/*.d.ts'",
+        "clean": "rm -rf dist/",
+        "r": "ts-node --files"
+    },
+    "dependencies": {
+        "noble-uwp": "^0.6.2"
+    },
+    "devDependencies": {
+        "@types/noble": "^0.0.37",
+        "@types/node": "8",
+        "ts-node": "^7.0.1",
+        "tslint": "^5.11.0",
+        "typescript": "^3.1.1"
+    }
+}
