@@ -3,6 +3,7 @@ import * as noble from "noble-uwp";
 
 export const enum Color {
     Off,
+    Black = 0,
     Pink,
     Purple,
     Blue,
