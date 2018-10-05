@@ -99,11 +99,11 @@ class Motor {
         this.eventEmitter.addListener(event, listener);
     }
 
-    isSpeed() {
+    get speedMode() {
         return this.speed;
     }
 
-    async setSpeed(speed: boolean) {
+    async setSpeedMode(speed: boolean) {
         if (this.speed !== speed) {
             this.speed = speed;
             if (this.subscribed) {
@@ -183,11 +183,11 @@ class ColorAndDistance {
         this.eventEmitter.addListener(event, listener);
     }
 
-    isLuminosity() {
+    get luminosityMode() {
         return this.luminosity;
     }
 
-    async setLuminosity(luminosity: boolean) {
+    async setLuminosityMode(luminosity: boolean) {
         if (this.luminosity !== luminosity) {
             this.luminosity = luminosity;
             if (this.eventEmitter) {

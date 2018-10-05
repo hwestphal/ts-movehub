@@ -34,7 +34,7 @@ async function main() {
             turn();
         }
     });
-    await moveHub.motorAB.setSpeed(true);
+    await moveHub.motorAB.setSpeedMode(true);
     await moveHub.motorAB.subscribe("speed", (speed) => {
         if (speed === 0) {
             turn();
