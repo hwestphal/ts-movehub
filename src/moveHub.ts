@@ -312,36 +312,40 @@ export function discoverMoveHub(timeout: number = 30000, moveHubName = "LEGO Mov
             reject("timeout");
         }, timeout);
         noble.on("discover", (p) => {
-            p.connect((connectError) => {
-                if (connectError) {
-                    return;
-                }
-                if (p.advertisement.localName === moveHubName) {
-                    clearTimeout(timer);
-                    noble.stopScanning();
-                    p.discoverSomeServicesAndCharacteristics(
-                        [MOVE_HUB_SERVICE],
-                        [MOVE_HUB_CHARACTERISTIC],
-                        (discoverError, srvs, chrs) => {
-                            if (discoverError || chrs.length !== 1) {
-                                p.disconnect();
-                                reject(discoverError || "characteristic not found");
-                            } else {
-                                chrs[0].notify(true, (notifyError) => {
-                                    if (notifyError) {
-                                        p.disconnect();
-                                        reject(notifyError);
-                                    } else {
-                                        // wait some time for all sensors to be initialized
-                                        setTimeout(() => resolve(new MoveHub(p, chrs[0])), 2000);
-                                    }
-                                });
-                            }
-                        });
-                } else {
-                    p.disconnect();
-                }
-            });
+            try {
+                p.connect((connectError) => {
+                    if (connectError) {
+                        return;
+                    }
+                    if (p.advertisement.localName === moveHubName) {
+                        clearTimeout(timer);
+                        noble.stopScanning();
+                        p.discoverSomeServicesAndCharacteristics(
+                            [MOVE_HUB_SERVICE],
+                            [MOVE_HUB_CHARACTERISTIC],
+                            (discoverError, srvs, chrs) => {
+                                if (discoverError || chrs.length !== 1) {
+                                    p.disconnect();
+                                    reject(discoverError || "characteristic not found");
+                                } else {
+                                    chrs[0].notify(true, (notifyError) => {
+                                        if (notifyError) {
+                                            p.disconnect();
+                                            reject(notifyError);
+                                        } else {
+                                            // wait some time for all sensors to be initialized
+                                            setTimeout(() => resolve(new MoveHub(p, chrs[0])), 2000);
+                                        }
+                                    });
+                                }
+                            });
+                    } else {
+                        p.disconnect();
+                    }
+                });
+            } catch (connectExeption) {
+                // ignore
+            }
         });
         noble.on("stateChange", (state) => {
             if (state === "poweredOn") {
