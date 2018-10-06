@@ -1,4 +1,4 @@
-import { Color, discoverMoveHub } from "../src/moveHub";
+import { Color, discoverMoveHub, Orientation } from "../src/moveHub";
 
 function timeout(ms: number) {
     return new Promise<void>((resolve) => setTimeout(() => resolve(), ms));
@@ -14,8 +14,10 @@ async function main() {
     console.log("Connected. Press return to disconnect.");
 
     let isTurning = false;
+    let isUp = true;
+
     async function turn() {
-        if (!isTurning) {
+        if (!isTurning && isUp) {
             isTurning = true;
             await moveHub.led(Color.Red);
             await moveHub.motorAB.stop();
@@ -38,6 +40,21 @@ async function main() {
     await moveHub.motorAB.subscribe("speed", (speed) => {
         if (speed === 0) {
             turn();
+        }
+    });
+    await moveHub.subscribeTilt("simple", async (value) => {
+        const old = isUp;
+        const cur = value === Orientation.Up;
+        isUp = cur;
+        if (old && !cur) {
+            await moveHub.motorAB.stop();
+            for (let i = 0; i < 10; i++) {
+                await moveHub.led(Color.Green);
+                await timeout(100);
+                await moveHub.led(Color.Off);
+            }
+        } else if (!old && cur) {
+            await moveHub.motorAB.constant(40);
         }
     });
 

@@ -11,9 +11,6 @@ It uses [noble-uwp](https://github.com/jasongin/noble-uwp) — a Bluetooth LE AP
 - Color and distance sensor notifications (color/distance and luminosity)
 - LED
 - Button notifications (pressed and released)
-
-### Backlog
-
-- Tilt sensor notifications
+- Tilt sensor notifications (3 axis simple and precise)
 
 See [here](examples/example1.ts) for an usage example.

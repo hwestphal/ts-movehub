@@ -16,6 +16,15 @@ export const enum Color {
     White,
 }
 
+export const enum Orientation {
+    Back,
+    Up,
+    Down,
+    Left,
+    Right,
+    Front,
+}
+
 const CMD_MOTOR_CONSTANT_SINGLE = Buffer.from([0x0a, 0x00, 0x81, 0x00, 0x11, 0x01, 0x00, 0x64, 0x7f, 0x03]);
 const CMD_MOTOR_CONSTANT_GROUP = Buffer.from([0x0b, 0x00, 0x81, 0x00, 0x11, 0x02, 0x00, 0x00, 0x64, 0x7f, 0x03]);
 const CMD_MOTOR_TIMED_SINGLE = Buffer.from([0x0c, 0x00, 0x81, 0x00, 0x11, 0x09, 0x00, 0x00, 0x00, 0x64, 0x7f, 0x03]);
@@ -229,10 +238,20 @@ class ColorAndDistance {
 
 }
 
+interface ITiltValue {
+    x: number;
+    y: number;
+    z: number;
+}
+
 const CMD_LED = Buffer.from([0x08, 0x00, 0x81, 0x32, 0x11, 0x51, 0x00, 0x00]);
 const CMD_SUBSCRIBE_BUTTON = Buffer.from([0x05, 0x00, 0x01, 0x02, 0x02]);
+const CMD_SUBSCRIBE_TILT_PRECISE = Buffer.from([0x0a, 0x00, 0x41, 0x3a, 0x04, 0x08, 0x00, 0x00, 0x00, 0x01]);
+const CMD_SUBSCRIBE_TILT_SIMPLE = Buffer.from([0x0a, 0x00, 0x41, 0x3a, 0x02, 0x01, 0x00, 0x00, 0x00, 0x01]);
 const EVENT_BUTTON_PRESSED = Buffer.from([0x06, 0x00, 0x01, 0x02, 0x06, 0x01]);
 const EVENT_BUTTON_RELEASED = Buffer.from([0x06, 0x00, 0x01, 0x02, 0x06, 0x00]);
+const EVENT_TILT_PRECISE = Buffer.from([0x07, 0x00, 0x45, 0x3a]);
+const EVENT_TILT_SIMPLE = Buffer.from([0x05, 0x00, 0x45, 0x3a]);
 
 class MoveHub {
     readonly motorA: Motor;
@@ -245,6 +264,8 @@ class MoveHub {
 
     private buttonEventEmitter: EventEmitter | undefined;
     private buttonPressed = false;
+    private tiltEventEmitter: EventEmitter | undefined;
+    private precise = false;
 
     constructor(private peripheral: noble.Peripheral, private characteristic: noble.Characteristic) {
         this.motorA = new Motor(0x37, characteristic);
@@ -271,6 +292,29 @@ class MoveHub {
         this.buttonEventEmitter.addListener(event, listener);
     }
 
+    async subscribeTilt(event: "precise", listener: (value: ITiltValue) => void): Promise<void>;
+    async subscribeTilt(event: "simple", listener: (value: Orientation) => void): Promise<void>;
+    async subscribeTilt(event: string, listener: (value: any) => void) {
+        if (!this.tiltEventEmitter) {
+            this.tiltEventEmitter = new EventEmitter();
+            await writeData(this.characteristic, this.precise ? CMD_SUBSCRIBE_TILT_PRECISE : CMD_SUBSCRIBE_TILT_SIMPLE);
+        }
+        this.tiltEventEmitter.addListener(event, listener);
+    }
+
+    get tiltPreciseMode() {
+        return this.precise;
+    }
+
+    async setTiltPreciseMode(precise: boolean) {
+        if (this.precise !== precise) {
+            this.precise = precise;
+            if (this.tiltEventEmitter) {
+                await writeData(this.characteristic, precise ? CMD_SUBSCRIBE_TILT_PRECISE : CMD_SUBSCRIBE_TILT_SIMPLE);
+            }
+        }
+    }
+
     disconnect() {
         return new Promise<void>((r) => this.peripheral.disconnect(() => r()));
     }
@@ -286,6 +330,14 @@ class MoveHub {
             if (this.buttonPressed && this.buttonEventEmitter) {
                 this.buttonEventEmitter.emit("released");
             }
+        } else if (data.slice(0, 4).equals(EVENT_TILT_PRECISE) && this.tiltEventEmitter) {
+            this.tiltEventEmitter.emit("precise", {
+                x: data.readInt8(4) * 360 / 256,
+                y: data.readInt8(5) * 360 / 256,
+                z: data.readInt8(6) * 360 / 256,
+            });
+        } else if (data.slice(0, 4).equals(EVENT_TILT_SIMPLE) && this.tiltEventEmitter) {
+            this.tiltEventEmitter.emit("simple", data.readUInt8(4));
         }
     }
 
