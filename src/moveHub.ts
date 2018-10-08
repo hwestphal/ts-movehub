@@ -65,6 +65,7 @@ export interface IMoveHub {
     readonly colorAndDistanceC: IColorAndDistance;
     readonly colorAndDistanceD: IColorAndDistance;
     readonly tiltPreciseMode: boolean;
+    readonly connected: boolean;
     led(color: Color): Promise<void>;
     subscribeButton(event: "pressed" | "released", listener: () => void): Promise<void>;
     subscribeTilt(event: "precise", listener: (value: ITiltValue) => void): Promise<void>;
@@ -196,6 +197,10 @@ class Motor implements IMotor {
     }
 
     private onData(data: Buffer) {
+        if (!data.slice) {
+            // ignore read error
+            return;
+        }
         if (data.slice(0, 4).equals(Buffer.from([0x05, 0x00, 0x82, this.port]))) {
             const value = data.readUInt8(4);
             if (value === 0x01) {
@@ -253,6 +258,10 @@ class ColorAndDistance implements IColorAndDistance {
     }
 
     private onData(data: Buffer) {
+        if (!data.slice) {
+            // ignore read error
+            return;
+        }
         if (data.slice(0, 4).equals(Buffer.from([0x08, 0x00, 0x45, this.port])) && this.eventEmitter) {
             if (this.luminosity) {
                 const value = data.readUInt32LE(4);
@@ -300,6 +309,7 @@ class MoveHub implements IMoveHub {
     private buttonPressed = false;
     private tiltEventEmitter: EventEmitter | undefined;
     private precise = false;
+    private connectionTimer: NodeJS.Timer;
 
     constructor(private peripheral: noble.Peripheral, private characteristic: noble.Characteristic) {
         this.motorA = new Motor(0x37, characteristic);
@@ -310,6 +320,11 @@ class MoveHub implements IMoveHub {
         this.colorAndDistanceC = new ColorAndDistance(0x01, characteristic);
         this.colorAndDistanceD = new ColorAndDistance(0x02, characteristic);
         characteristic.on("data", (data: Buffer) => this.onData(data));
+        this.connectionTimer = setInterval(() => characteristic.read(), 1000);
+    }
+
+    get connected() {
+        return this.peripheral.state === "connected";
     }
 
     led(color: Color) {
@@ -362,10 +377,16 @@ class MoveHub implements IMoveHub {
     }
 
     disconnect() {
+        clearInterval(this.connectionTimer);
         return new Promise<void>((r) => this.peripheral.disconnect(() => r()));
     }
 
     private onData(data: Buffer) {
+        if (!data.slice) {
+            // device is disconnected
+            this.disconnect();
+            return;
+        }
         if (data.equals(EVENT_BUTTON_PRESSED)) {
             this.buttonPressed = true;
             if (this.buttonEventEmitter) {
@@ -408,9 +429,11 @@ export function discoverMoveHub(timeout = 30000, initDelay = 2000, moveHubName =
     return new Promise<IMoveHub>((resolve, reject) => {
         const timer = setTimeout(() => {
             noble.stopScanning();
+            noble.removeListener("discover", discoverListener);
             reject("timeout");
         }, timeout);
-        noble.on("discover", (p) => {
+
+        const discoverListener = (p: noble.Peripheral) => {
             try {
                 p.connect((connectError) => {
                     if (connectError) {
@@ -419,6 +442,7 @@ export function discoverMoveHub(timeout = 30000, initDelay = 2000, moveHubName =
                     if (p.advertisement.localName === moveHubName) {
                         clearTimeout(timer);
                         noble.stopScanning();
+                        noble.removeListener("discover", discoverListener);
                         createMoveHub(p, initDelay).then(resolve).catch(reject);
                     } else {
                         p.disconnect();
@@ -427,12 +451,18 @@ export function discoverMoveHub(timeout = 30000, initDelay = 2000, moveHubName =
             } catch (connectExeption) {
                 // ignore
             }
-        });
-        noble.on("stateChange", (state) => {
-            if (state === "poweredOn") {
-                noble.startScanning();
-            }
-        });
+        };
+        noble.on("discover", discoverListener);
+
+        if (noble.state === "poweredOn") {
+            noble.startScanning();
+        } else {
+            noble.on("stateChange", (state) => {
+                if (state === "poweredOn") {
+                    noble.startScanning();
+                }
+            });
+        }
     });
 }
 
