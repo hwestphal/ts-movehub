@@ -25,6 +25,55 @@ export const enum Orientation {
     Front,
 }
 
+export interface IColorAndDistanceValue {
+    color: Color | undefined;
+    distance: number;
+}
+
+export interface ITiltValue {
+    x: number;
+    y: number;
+    z: number;
+}
+
+export interface IMotor {
+    readonly speedMode: boolean;
+    constant(speed: number, speedB?: number): Promise<void>;
+    timed(time: number, speed: number, speedB?: number): Promise<void>;
+    timedAndWait(time: number, speed: number, speedB?: number): Promise<void>;
+    angled(angle: number, speed: number, speedB?: number): Promise<void>;
+    angledAndWait(angle: number, speed: number, speedB?: number): Promise<void>;
+    stop(): Promise<void>;
+    subscribe(event: "motorOn" | "motorOff", listener: () => void): Promise<void>;
+    subscribe(event: "angle" | "speed", listener: (value: number) => void): Promise<void>;
+    setSpeedMode(speed: boolean): Promise<void>;
+}
+
+export interface IColorAndDistance {
+    readonly luminosityMode: boolean;
+    subscribe(event: "colorAndDistance", listener: (value: IColorAndDistanceValue) => void): Promise<void>;
+    subscribe(event: "luminosity", listener: (value: number) => void): Promise<void>;
+    setLuminosityMode(luminosity: boolean): Promise<void>;
+}
+
+export interface IMoveHub {
+    readonly motorA: IMotor;
+    readonly motorB: IMotor;
+    readonly motorAB: IMotor;
+    readonly motorC: IMotor;
+    readonly motorD: IMotor;
+    readonly colorAndDistanceC: IColorAndDistance;
+    readonly colorAndDistanceD: IColorAndDistance;
+    readonly tiltPreciseMode: boolean;
+    led(color: Color): Promise<void>;
+    subscribeButton(event: "pressed" | "released", listener: () => void): Promise<void>;
+    subscribeTilt(event: "precise", listener: (value: ITiltValue) => void): Promise<void>;
+    subscribeTilt(event: "simple", listener: (value: Orientation) => void): Promise<void>;
+    setTiltPreciseMode(precise: boolean): Promise<void>;
+    reset(): Promise<IMoveHub>;
+    disconnect(): Promise<void>;
+}
+
 const CMD_MOTOR_CONSTANT_SINGLE = Buffer.from([0x0a, 0x00, 0x81, 0x00, 0x11, 0x01, 0x00, 0x64, 0x7f, 0x03]);
 const CMD_MOTOR_CONSTANT_GROUP = Buffer.from([0x0b, 0x00, 0x81, 0x00, 0x11, 0x02, 0x00, 0x00, 0x64, 0x7f, 0x03]);
 const CMD_MOTOR_TIMED_SINGLE = Buffer.from([0x0c, 0x00, 0x81, 0x00, 0x11, 0x09, 0x00, 0x00, 0x00, 0x64, 0x7f, 0x03]);
@@ -37,7 +86,7 @@ const CMD_MOTOR_ANGLED_GROUP =
 const CMD_SUBSCRIBE_ANGLE = Buffer.from([0x0a, 0x00, 0x41, 0x00, 0x02, 0x01, 0x00, 0x00, 0x00, 0x01]);
 const CMD_SUBSCRIBE_SPEED = Buffer.from([0x0a, 0x00, 0x41, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x01]);
 
-class Motor {
+class Motor implements IMotor {
     private eventEmitter = new EventEmitter();
     private subscribed = false;
     private speed = false;
@@ -99,8 +148,6 @@ class Motor {
         return this.constant(0);
     }
 
-    subscribe(event: "motorOn" | "motorOff", listener: () => void): Promise<void>;
-    subscribe(event: "angle" | "speed", listener: (value: number) => void): Promise<void>;
     async subscribe(event: string, listener: (value: any) => void) {
         if (!this.subscribed && (event === "angle" || event === "speed")) {
             this.subscribed = true;
@@ -167,15 +214,10 @@ class Motor {
 
 }
 
-interface IColorAndDistanceValue {
-    color: Color | undefined;
-    distance: number;
-}
-
 const CMD_SUBSCRIBE_DISTANCE = Buffer.from([0x0a, 0x00, 0x41, 0x00, 0x08, 0x01, 0x00, 0x00, 0x00, 0x01]);
 const CMD_SUBSCRIBE_LUMINOSITY = Buffer.from([0x0a, 0x00, 0x41, 0x00, 0x09, 0x01, 0x00, 0x00, 0x00, 0x01]);
 
-class ColorAndDistance {
+class ColorAndDistance implements IColorAndDistance {
     private eventEmitter: EventEmitter | undefined;
     private luminosity = false;
 
@@ -183,8 +225,6 @@ class ColorAndDistance {
         characteristic.on("data", (data: Buffer) => this.onData(data));
     }
 
-    subscribe(event: "colorAndDistance", listener: (value: IColorAndDistanceValue) => void): Promise<void>;
-    subscribe(event: "luminosity", listener: (value: number) => void): Promise<void>;
     async subscribe(event: string, listener: (value: any) => void) {
         if (!this.eventEmitter) {
             this.eventEmitter = new EventEmitter();
@@ -238,12 +278,6 @@ class ColorAndDistance {
 
 }
 
-interface ITiltValue {
-    x: number;
-    y: number;
-    z: number;
-}
-
 const CMD_LED = Buffer.from([0x08, 0x00, 0x81, 0x32, 0x11, 0x51, 0x00, 0x00]);
 const CMD_SUBSCRIBE_BUTTON = Buffer.from([0x05, 0x00, 0x01, 0x02, 0x02]);
 const CMD_SUBSCRIBE_TILT_PRECISE = Buffer.from([0x0a, 0x00, 0x41, 0x3a, 0x04, 0x08, 0x00, 0x00, 0x00, 0x01]);
@@ -253,14 +287,14 @@ const EVENT_BUTTON_RELEASED = Buffer.from([0x06, 0x00, 0x01, 0x02, 0x06, 0x00]);
 const EVENT_TILT_PRECISE = Buffer.from([0x07, 0x00, 0x45, 0x3a]);
 const EVENT_TILT_SIMPLE = Buffer.from([0x05, 0x00, 0x45, 0x3a]);
 
-class MoveHub {
-    readonly motorA: Motor;
-    readonly motorB: Motor;
-    readonly motorAB: Motor;
-    readonly motorC: Motor;
-    readonly motorD: Motor;
-    readonly colorAndDistanceC: ColorAndDistance;
-    readonly colorAndDistanceD: ColorAndDistance;
+class MoveHub implements IMoveHub {
+    readonly motorA: IMotor;
+    readonly motorB: IMotor;
+    readonly motorAB: IMotor;
+    readonly motorC: IMotor;
+    readonly motorD: IMotor;
+    readonly colorAndDistanceC: IColorAndDistance;
+    readonly colorAndDistanceD: IColorAndDistance;
 
     private buttonEventEmitter: EventEmitter | undefined;
     private buttonPressed = false;
@@ -284,7 +318,7 @@ class MoveHub {
         return writeData(this.characteristic, cmd);
     }
 
-    async subscribeButton(event: "pressed" | "released", listener: () => void) {
+    async subscribeButton(event: string, listener: () => void) {
         if (!this.buttonEventEmitter) {
             this.buttonEventEmitter = new EventEmitter();
             await writeData(this.characteristic, CMD_SUBSCRIBE_BUTTON);
@@ -292,8 +326,6 @@ class MoveHub {
         this.buttonEventEmitter.addListener(event, listener);
     }
 
-    async subscribeTilt(event: "precise", listener: (value: ITiltValue) => void): Promise<void>;
-    async subscribeTilt(event: "simple", listener: (value: Orientation) => void): Promise<void>;
     async subscribeTilt(event: string, listener: (value: any) => void) {
         if (!this.tiltEventEmitter) {
             this.tiltEventEmitter = new EventEmitter();
@@ -373,7 +405,7 @@ const MOVE_HUB_SERVICE = "000016231212efde1623785feabcd123";
 const MOVE_HUB_CHARACTERISTIC = "000016241212efde1623785feabcd123";
 
 export function discoverMoveHub(timeout = 30000, initDelay = 2000, moveHubName = "LEGO Move Hub") {
-    return new Promise<MoveHub>((resolve, reject) => {
+    return new Promise<IMoveHub>((resolve, reject) => {
         const timer = setTimeout(() => {
             noble.stopScanning();
             reject("timeout");
@@ -405,7 +437,7 @@ export function discoverMoveHub(timeout = 30000, initDelay = 2000, moveHubName =
 }
 
 function createMoveHub(p: noble.Peripheral, initDelay: number) {
-    return new Promise<MoveHub>((resolve, reject) => {
+    return new Promise<IMoveHub>((resolve, reject) => {
         p.discoverSomeServicesAndCharacteristics(
             [MOVE_HUB_SERVICE],
             [MOVE_HUB_CHARACTERISTIC],
@@ -426,5 +458,4 @@ function createMoveHub(p: noble.Peripheral, initDelay: number) {
                 }
             });
     });
-
 }
