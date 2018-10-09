@@ -1,5 +1,18 @@
 {
-    "private": true,
+    "name": "@hwestphal/ts-movehub",
+    "version": "0.1.0",
+    "description": "A Typescript library for interacting with a LEGO® Boost Move Hub on Windows 10",
+    "author": "Harald Westphal",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/hwestphal/ts-movehub"
+    },
+    "main": "dist/moveHub.js",
+    "typings": "dist/moveHub.d.ts",
+    "files": [
+        "dist/"
+    ],
     "scripts": {
         "build": "tsc && tslint -p . && tslint 'src/**/*.d.ts'",
         "clean": "rm -rf dist/",
