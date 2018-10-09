@@ -184,7 +184,7 @@ class Motor implements IMotor {
             };
             const motorRunning = () => {
                 this.eventEmitter.removeListener("motorOn", motorOn);
-                reject("motor is still running");
+                reject(new Error("motor is still running"));
             };
             this.eventEmitter.once("motorRunning", motorRunning);
             this.eventEmitter.once("motorOn", motorOn);
@@ -363,11 +363,14 @@ class MoveHub implements IMoveHub {
     }
 
     async reset() {
+        if (!this.connected) {
+            throw new Error("disconnected");
+        }
         await this.disconnect();
         await new Promise<void>((resolve, reject) => {
             this.peripheral.connect((error) => {
                 if (error) {
-                    reject(error);
+                    reject(new Error(error));
                 } else {
                     resolve();
                 }
@@ -414,7 +417,7 @@ function writeData(characteristic: noble.Characteristic, data: Buffer) {
     return new Promise<void>((resolve, reject) => {
         characteristic.write(data, false, (error) => {
             if (error) {
-                reject(error);
+                reject(new Error(error));
             } else {
                 resolve();
             }
@@ -425,15 +428,18 @@ function writeData(characteristic: noble.Characteristic, data: Buffer) {
 const MOVE_HUB_SERVICE = "000016231212efde1623785feabcd123";
 const MOVE_HUB_CHARACTERISTIC = "000016241212efde1623785feabcd123";
 
-export function discoverMoveHub(timeout = 30000, initDelay = 2000, moveHubName = "LEGO Move Hub") {
+export function discoverMoveHub(timeout = 30000, initDelay = 2000, address?: string, moveHubName = "LEGO Move Hub") {
     return new Promise<IMoveHub>((resolve, reject) => {
         const timer = setTimeout(() => {
             noble.stopScanning();
             noble.removeListener("discover", discoverListener);
-            reject("timeout");
+            reject(new Error("timeout"));
         }, timeout);
 
         const discoverListener = (p: noble.Peripheral) => {
+            if (address && p.address !== address) {
+                return;
+            }
             try {
                 p.connect((connectError) => {
                     if (connectError) {
@@ -474,12 +480,12 @@ function createMoveHub(p: noble.Peripheral, initDelay: number) {
             (discoverError, srvs, chrs) => {
                 if (discoverError || chrs.length !== 1) {
                     p.disconnect();
-                    reject(discoverError || "characteristic not found");
+                    reject(new Error(discoverError || "characteristic not found"));
                 } else {
                     chrs[0].notify(true, (notifyError) => {
                         if (notifyError) {
                             p.disconnect();
-                            reject(notifyError);
+                            reject(new Error(notifyError));
                         } else {
                             // wait some time for all sensors to be initialized
                             setTimeout(() => resolve(new MoveHub(p, chrs[0])), initDelay);
